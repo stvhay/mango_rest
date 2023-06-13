@@ -1,0 +1,5 @@
+httpx
+pendulum
+plotext
+pydantic
+python-dotenv
