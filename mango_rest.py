@@ -16,12 +16,18 @@ class MangoClient:
         self.client = None
 
     def __enter__(self):
+        return self.open()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def open(self):
         self.client = httpx.Client(base_url=self.ip, headers=MangoClient.headers, cookies=MangoClient.cookies)
         self.post('/rest/latest/login', json={"username": self.username, "password": self.password})
         self.password = None
         return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    
+    def close(self):
         self.client.close()
 
     def get(self, url, **kwargs):

@@ -1,12 +1,12 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class PointLocator(BaseModel):
     dataType: str
     settable: bool
     relinquishable: bool|None
     configurationDescription: str
-    monitorId: str
+    monitorId: Optional[str]
     modelType: str
 
 class LoggingProperties(BaseModel):
@@ -18,7 +18,7 @@ class LoggingProperties(BaseModel):
 
 class TextRenderer(BaseModel):
     useUnitAsSuffix: bool
-    format: str
+    format: Optional[str]
     suffix: str
     type: str
 

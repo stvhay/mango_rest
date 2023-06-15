@@ -2,4 +2,5 @@ httpx
 pendulum
 plotext
 pydantic
+pytest
 python-dotenv
