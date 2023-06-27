@@ -15,7 +15,7 @@ class MangoClient:
         self.username = username
         self.password = password
         self.client = None
-        self.semaphore = asyncio.Semaphore(5)  # Limiting to 5 connections
+        self.semaphore = asyncio.Semaphore(6)  # Limiting to 5 connections
 
     async def __aenter__(self):
         return await self.open()
