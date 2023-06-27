@@ -2,6 +2,7 @@ import json
 import os
 import re
 from dotenv import load_dotenv
+import yaml
 
 import pendulum
 import mango_rest
@@ -10,6 +11,20 @@ import asyncio
 
 def rql(device_name, point_name):
     return f'match(name,{point_name})&match(deviceName,{device_name})&sort(name)&limit(500)'
+
+"""
+Example YAML entry. This is a single element list with device_name, point_name, and tag defined:
+- device_name: '*PCS'
+  point_name: 'First Trip'
+  tag: 'pcs_first_trip'
+"""
+def load_rql_data_from_yaml(file_path):
+    with open(file_path, 'r') as file:
+        return yaml.safe_load(file)
+
+def save_rql_data_to_yaml(rql_data, file_path):
+    with open(file_path, 'w') as file:
+        yaml.dump(rql_data, file)
 
 async def pull(client_object, query, tag='values'):
     c = client_object['client']
@@ -39,9 +54,9 @@ async def main():
     load_dotenv()
     username = os.getenv('username')
     password = os.getenv('password')
+    pull_parameters = load_rql_data_from_yaml('rql_data.yaml')
 
     # activate the Mango clients
-    print("Activating Mango Clients...")
     clients = []
     for array in ["01", "02", "03"]:
         for core in ["01", "02", "03", "04"]:
@@ -51,49 +66,29 @@ async def main():
                 "client": await mango_rest.MangoClient(f'https://sdge-escondido{array}-core{core}.fluenceenergy.com:9443', username, password).open()
             })
 
-    print("Beginning Data Pull...")
     # Run First Fault test and output TSV
-    await asyncio.gather(
-        *[pull(client_object, rql('*PCS', 'First Trip'),                     tag='pcs_first_trip')              for client_object in clients],
-        *[pull(client_object, rql('*PCS', 'Firmware Version'),               tag='pcs_firmware_version')        for client_object in clients],
-        *[pull(client_object, rql('*PCS', 'Config Version'),                 tag='pcs_config_version')          for client_object in clients],
-        *[pull(client_object, rql('*', 'Node Current State'),                tag='node_current_state')          for client_object in clients],
-        *[pull(client_object, rql('*BMS', '0045 - First fault code'),        tag='bms_first_fault_code')        for client_object in clients],
-        *[pull(client_object, rql('*BMS', '0020 - Number of total strings'), tag='bms_number_of_total_strings') for client_object in clients],
-        *[pull(client_object, rql('*BMS', '0060 - Hardware version'),        tag='bms_hardware_version')        for client_object in clients],
-        *[pull(client_object, rql('*BMS', '0061 - Software version'),        tag='bms_software_version')        for client_object in clients]
-    )
+    data_pulls = []
+    for pull_parameter in pull_parameters:
+        device_name = pull_parameter['device_name']
+        point_name = pull_parameter['point_name']
+        tag = pull_parameter['tag']
+        for client_object in clients:
+            data_pulls.append(pull(client_object, rql(device_name, point_name), tag=tag))
+    await asyncio.gather(*data_pulls)
 
-    print('array\tcore\tmodule\tnode\tnode_current_state\tpcs_first_trip\tpcs_firmware_version\tpcs_config_version\tbms_first_fault_code\tbms_number_of_total_strings\tbms_hardware_version\tbms_software_version')
+    # print headings and then data
+    print('array\tcore\tmodule\tnode', end='')
+    for pull_parameter in pull_parameters:
+        print(f'\t{pull_parameter["tag"]}', end='')
+    print()
+
     for client_object in clients:
-        array = client_object['array']
-        core = client_object['core']
-        for (
-            module,
-            node,
-            node_current_state,
-            pcs_first_trip,
-            pcs_firmware_version,
-            pcs_config_version,
-            bms_first_fault_code,
-            bms_number_of_total_strings,
-            bms_hardware_version,
-            bms_software_version,
-        ) in zip(
-            client_object['modules'],
-            client_object['nodes'],
-            client_object['node_current_state'],
-            client_object['pcs_first_trip'],
-            client_object['pcs_firmware_version'],
-            client_object['pcs_config_version'],
-            client_object['bms_first_fault_code'],
-            client_object['bms_number_of_total_strings'],
-            client_object['bms_hardware_version'],
-            client_object['bms_software_version'],
-        ):
-            print(
-                f"{array}\t{core}\t{module}\t{node}\t{node_current_state}\t{pcs_first_trip}\t{pcs_firmware_version}\t{pcs_config_version}\t{bms_first_fault_code}\t{bms_number_of_total_strings}\t{bms_hardware_version}\t{bms_software_version}"
-            )
+        for columns in zip(client_object['modules'], client_object['nodes'], *([client_object[parameter['tag']] for parameter in pull_parameters])):
+            print(f"{client_object['array']}", end='')
+            print(f"\t{client_object['core']}", end='')
+            for column in columns:
+                print(f'\t{column}', end='')
+            print()
 
 # Run the event loop
 asyncio.run(main())
